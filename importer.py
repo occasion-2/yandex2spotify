@@ -67,9 +67,10 @@ class NotFoundException(SpotifyException):
 
 
 class Importer:
-    def __init__(self, spotify_client, yandex_client: Client, ignore_list, strict_search):
+    def __init__(self, spotify_client, yandex_client: Client, ignore_list, strict_search, chunk_size):
         self.spotify_client = spotify_client
         self.yandex_client = yandex_client
+        self.chunk_size = chunk_size
 
         self._importing_items = {
             'likes': self.import_likes,
@@ -85,6 +86,7 @@ class Importer:
 
         self.user = handle_spotify_exception(spotify_client.me)()['id']
         logger.info(f'User ID: {self.user}')
+        logger.info(f'Chunk size: {self.chunk_size}')
 
         self.not_imported = {}
 
@@ -147,7 +149,7 @@ class Importer:
             logger.info('No valid Spotify items to add.')
             return
 
-        for chunk in chunks(spotify_items, 50):
+        for chunk in chunks(spotify_items, self.chunk_size):
             save_items_callback(self, chunk)
 
 
@@ -266,7 +268,7 @@ class Importer:
         playlist = handle_spotify_exception(self.spotify_client.user_playlist_create)(self.user, playlist_name)
 
         # Add tracks to the new playlist
-        for chunk in chunks(spotify_tracks, 50):
+        for chunk in chunks(spotify_tracks, self.chunk_size):
             logger.info(f'Saving {len(chunk)} tracks...')
             handle_spotify_exception(self.spotify_client.user_playlist_add_tracks)(self.user, playlist['id'], chunk)
             logger.info('OK')
@@ -295,7 +297,17 @@ if __name__ == '__main__':
 
     parser.add_argument('-j', '--json-path', help='JSON file to import tracks from')
 
+    parser.add_argument(
+        '-c', '--chunk',
+        help='Batch size for Spotify save/add requests (1..40)',
+        type=int,
+        default=40
+    )
+
     arguments = parser.parse_args()
+
+    if not 1 <= arguments.chunk <= 40:
+        raise ValueError('The -c/--chunk argument must be between 1 and 40.')
 
     try:
         auth_manager = SpotifyOAuth(
@@ -316,7 +328,7 @@ if __name__ == '__main__':
             yandex_client_ = Client(arguments.token)
             yandex_client_.init()
 
-        importer_instance = Importer(spotify_client_, yandex_client_, arguments.ignore, arguments.strict_artists_search)
+        importer_instance = Importer(spotify_client_, yandex_client_, arguments.ignore, arguments.strict_artists_search, arguments.chunk)
 
         if arguments.json_path:
             importer_instance.import_from_json(arguments.json_path)
