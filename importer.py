@@ -145,11 +145,13 @@ class Importer:
             logger.info(f'Importing {type_}: {item_name}... (cached)')
             return cache_result
 
+        sleep(2.5)
         found_items = handle_spotify_exception(self.spotify_client.search)(query, type=type_)[f'{type_}s']['items']
         logger.info(f'Importing {type_}: {item_name}...')
 
         if not self._strict_search and not isinstance(item, Artist) and not len(found_items) and len(artists) > 1:
             query = f'{artists[0].name} {item.title}'
+            sleep(2.5)
             found_items = handle_spotify_exception(self.spotify_client.search)(query, type=type_)[f'{type_}s']['items']
 
         logger.info(f'Searching "{query}"...')
