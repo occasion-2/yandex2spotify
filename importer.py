@@ -68,10 +68,11 @@ class NotFoundException(SpotifyException):
 
 
 class Importer:
-    def __init__(self, spotify_client, yandex_client: Client, ignore_list, strict_search, chunk_size):
+    def __init__(self, spotify_client, yandex_client: Client, ignore_list, strict_search, chunk_size, sleep_duration=0.0):
         self.spotify_client = spotify_client
         self.yandex_client = yandex_client
         self.chunk_size = chunk_size
+        self.sleep_duration = sleep_duration
 
         self._importing_items = {
             'likes': self.import_likes,
@@ -145,13 +146,16 @@ class Importer:
             logger.info(f'Importing {type_}: {item_name}... (cached)')
             return cache_result
 
-        sleep(2.5)
+        if self.sleep_duration > 0:
+            sleep(self.sleep_duration)
         found_items = handle_spotify_exception(self.spotify_client.search)(query, type=type_)[f'{type_}s']['items']
         logger.info(f'Importing {type_}: {item_name}...')
 
         if not self._strict_search and not isinstance(item, Artist) and not len(found_items) and len(artists) > 1:
             query = f'{artists[0].name} {item.title}'
-            sleep(2.5)
+            if self.sleep_duration > 0:
+                sleep(self.sleep_duration)
+                
             found_items = handle_spotify_exception(self.spotify_client.search)(query, type=type_)[f'{type_}s']['items']
 
         logger.info(f'Searching "{query}"...')
@@ -348,6 +352,12 @@ if __name__ == '__main__':
         type=int,
         default=40
     )
+    parser.add_argument(
+        '-w', '--sleep',
+        help='Sleep duration between Spotify search requests (seconds)',
+        type=float,
+        default=0.0
+    )
 
     arguments = parser.parse_args()
 
@@ -373,7 +383,14 @@ if __name__ == '__main__':
             yandex_client_ = Client(arguments.token)
             yandex_client_.init()
 
-        importer_instance = Importer(spotify_client_, yandex_client_, arguments.ignore, arguments.strict_artists_search, arguments.chunk)
+        importer_instance = Importer(
+            spotify_client_,
+            yandex_client_,
+            arguments.ignore,
+            arguments.strict_artists_search,
+            arguments.chunk,
+            arguments.sleep
+        )
 
         if arguments.json_path:
             importer_instance.import_from_json(arguments.json_path)
