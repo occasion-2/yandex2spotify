@@ -7,10 +7,3 @@ venv/
 *.pyc
 
 .cache*
-
-*.json
-
-*.lock
-\.*
-pyproject.toml
-=*
